@@ -16,15 +16,33 @@ class SalaireCollectivesController extends Controller
         return response()->json($this->service->paginate($perPage));
     }
 
+    // NEW: GET /api/my/salaires-collectives
+    public function myIndex(Request $request)
+    {
+        $perPage = (int) $request->query('per_page', 15);
+        $user = $request->user();
+
+        return response()->json(
+            $this->service->paginateByEmployee((string) $user->id, $perPage)
+        );
+    }
+
     public function store(Request $request)
     {
         $data = $request->validate([
-            'employeeId' => 'required|string',
             'amountRequested' => 'required|numeric',
+            'reason' => 'nullable|string|max:255',  // ✅ ADD
             'collectiveAgreement' => 'nullable|string',
             'beneficiaryType' => 'nullable|string',
             'disbursementSchedule' => 'nullable|string',
+            'description' => 'nullable|string', // ✅ ADDED
+            'attachmentIds' => 'nullable|array', // ✅ ADDED
+            'attachmentIds.*' => 'string', // ✅ ADDED
         ]);
+
+        $data['employeeId'] = (string) $request->user()->id;
+        $data['status'] = 'En attente'; 
+        $data['submittedAt'] = now(); 
 
         return response()->json($this->service->create($data), 201);
     }

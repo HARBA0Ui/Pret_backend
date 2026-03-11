@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Mensualite;
+use App\Models\Pret;
 use App\Services\DonsScolaireService;
 use Illuminate\Http\Request;
 
@@ -16,18 +18,121 @@ class DonsScolaireController extends Controller
         return response()->json($this->service->paginate($perPage));
     }
 
+    public function myIndex(Request $request)
+    {
+        $perPage = (int) $request->query('per_page', 15);
+        $user = $request->user();
+
+        return response()->json(
+            $this->service->paginateByEmployee((string) $user->id, $perPage)
+        );
+    }
+
+    private function computeLimits(Request $request, int $months, float $sumCnss4Sem): array
+    {
+        $user = $request->user();
+        $salary = (float) ($user->salaire ?? 0);
+
+        $PLAFOND_SOCIETE = 10000.0;
+        $INTEREST_RATE = 0.04;
+
+        $plafondSociete = $PLAFOND_SOCIETE;
+        $plafondCnss = $sumCnss4Sem / 6.0;
+        $salary40 = $salary * 0.4;
+
+        $activePretIds = Pret::query()
+            ->where('employeeId', (string) $user->id)
+            ->whereIn('status', ['active', 'approved', 'Actif', 'Approuvé'])
+            ->pluck('_id')
+            ->toArray();
+
+        $sumExistingMensualites = 0.0;
+        if (!empty($activePretIds)) {
+            $sumExistingMensualites = (float) Mensualite::query()
+                ->where('employeeId', (string) $user->id)
+                ->whereIn('pretId', $activePretIds)
+                ->whereIn('status', ['pending', 'En attente', 'Actif', 'Approuvé'])
+                ->sum('amount');
+        }
+
+
+        $monthlyCapacity = max(0.0, $salary40 - $sumExistingMensualites);
+
+        $maxByMensualite = ($monthlyCapacity > 0)
+            ? ($monthlyCapacity * $months) / (1.0 + $INTEREST_RATE)
+            : 0.0;
+
+        $maxAmount = min($plafondSociete, $plafondCnss, $maxByMensualite);
+        $maxAmount = max(0.0, $maxAmount);
+
+        return [
+            'interestRate' => $INTEREST_RATE,
+            'monthlyCapacity' => $monthlyCapacity,
+            'maxAmount' => $maxAmount,
+        ];
+    }
+
     public function store(Request $request)
     {
         $data = $request->validate([
-            'employeeId' => 'required|string',
-            'amountRequested' => 'required|numeric',
+            'amountRequested' => 'required|numeric|min:0.01',
+            'dureeMonths' => 'required|integer|min:1|max:60',
+
+            'sumCnss4Sem' => 'required|numeric|min:0.01',
+            'cnssAttachmentIds' => 'required|array|size:4',
+            'cnssAttachmentIds.*' => 'string',
+
+            'reason' => 'nullable|string|max:255',
             'studentName' => 'required|string',
             'schoolName' => 'required|string',
             'schoolLevel' => 'required|string',
             'academicYear' => 'required|string',
-            'tuitionAmount' => 'nullable|numeric',
+            'tuitionAmount' => 'nullable|numeric|min:0',
             'purpose' => 'nullable|string',
+            'description' => 'nullable|string',
+
+            'attachmentIds' => 'nullable|array',
+            'attachmentIds.*' => 'string',
         ]);
+
+        $months = (int) $data['dureeMonths'];
+        $amount = (float) $data['amountRequested'];
+        $sumCnss4Sem = (float) $data['sumCnss4Sem'];
+
+        $limits = $this->computeLimits($request, $months, $sumCnss4Sem);
+        $interestRate = (float) $limits['interestRate'];
+        $monthlyCapacity = (float) $limits['monthlyCapacity'];
+        $maxAmount = (float) $limits['maxAmount'];
+
+        if ($amount > $maxAmount) {
+            return response()->json([
+                'message' => "Montant dépasse le max autorisé (" . number_format($maxAmount, 2, '.', '') . " TND)."
+            ], 422);
+        }
+
+        $totalToRepay = $amount * (1.0 + $interestRate);
+        $mensualite = ($months > 0) ? ($totalToRepay / $months) : $totalToRepay;
+
+        if ($monthlyCapacity <= 0) {
+            return response()->json([
+                'message' => "Vous n'avez plus de capacité mensuelle (40% salaire déjà consommé)."
+            ], 422);
+        }
+
+        if ($mensualite > $monthlyCapacity + 0.0001) {
+            return response()->json([
+                'message' => "Durée insuffisante. Mensualité (" . number_format($mensualite, 2, '.', '') .
+                    " TND) dépasse votre capacité (" . number_format($monthlyCapacity, 2, '.', '') . " TND)."
+            ], 422);
+        }
+
+        $data['employeeId'] = (string) $request->user()->id;
+        $data['status'] = 'En attente';
+        $data['submittedAt'] = now();
+
+        $data['interestRate'] = $interestRate;
+        $data['totalToRepay'] = round($totalToRepay, 2);
+        $data['mensualiteExpected'] = round($mensualite, 2);
 
         return response()->json($this->service->create($data), 201);
     }
@@ -40,13 +145,16 @@ class DonsScolaireController extends Controller
     public function update(Request $request, string $id)
     {
         $data = $request->validate([
-            'amountRequested' => 'nullable|numeric',
+            'amountRequested' => 'nullable|numeric|min:0.01',
+            'dureeMonths' => 'nullable|integer|min:1|max:60',
             'studentName' => 'nullable|string',
             'schoolName' => 'nullable|string',
             'schoolLevel' => 'nullable|string',
             'academicYear' => 'nullable|string',
-            'tuitionAmount' => 'nullable|numeric',
+            'tuitionAmount' => 'nullable|numeric|min:0',
             'purpose' => 'nullable|string',
+            'reason' => 'nullable|string|max:255',
+            'description' => 'nullable|string',
         ]);
 
         return response()->json($this->service->update($id, $data));

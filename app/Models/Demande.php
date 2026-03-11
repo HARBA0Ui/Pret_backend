@@ -13,11 +13,13 @@ abstract class Demande extends Model
         'employeeId',
         'amountRequested',
         'approvedAmount',
+        'dureeMonths',        // ✅ NEW
         'submittedAt',
         'reviewedAt',
         'decisionAt',
         'reviewByAdminId',
         'reason',
+        'description',
         'attachments',
     ];
 
@@ -27,10 +29,10 @@ abstract class Demande extends Model
         'decisionAt' => 'datetime',
         'amountRequested' => 'float',
         'approvedAmount' => 'float',
+        'dureeMonths' => 'integer', // ✅ NEW
         'attachments' => 'array',
     ];
 
-    // Helper methods for child classes
     protected static function getParentFillable(): array
     {
         return [
@@ -38,11 +40,13 @@ abstract class Demande extends Model
             'employeeId',
             'amountRequested',
             'approvedAmount',
+            'dureeMonths',      // ✅ NEW
             'submittedAt',
             'reviewedAt',
             'decisionAt',
             'reviewByAdminId',
             'reason',
+            'description',
             'attachments',
         ];
     }
@@ -55,11 +59,11 @@ abstract class Demande extends Model
             'decisionAt' => 'datetime',
             'amountRequested' => 'float',
             'approvedAmount' => 'float',
+            'dureeMonths' => 'integer', // ✅ NEW
             'attachments' => 'array',
         ];
     }
 
-    // Relationships
     public function employee()
     {
         return $this->belongsTo(User::class, 'employeeId');

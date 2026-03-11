@@ -16,14 +16,41 @@ class MensualiteController extends Controller
         return response()->json($this->service->paginate($perPage));
     }
 
+    // GET /api/my/mensualites
+    public function myIndex(Request $request)
+    {
+        $perPage = (int) $request->query('per_page', 200);
+        $user = $request->user();
+
+        return response()->json(
+            $this->service->paginateByEmployee((string) $user->id, $perPage)
+        );
+    }
+
+    // GET /api/my/mensualites/next-due
+    public function myNextDue(Request $request)
+    {
+        $user = $request->user();
+        $next = $this->service->nextDueByEmployee((string) $user->id);
+
+        return response()->json([
+            'next_due' => $next,
+        ]);
+    }
+
     public function store(Request $request)
     {
         $data = $request->validate([
             'pretId' => 'required|string',
-            'employeeId' => 'required|string',
             'amount' => 'required|numeric',
-            'dueDate' => 'nullable|date',
+            'dueDate' => 'required|date', // ✅ obligatoire sinon "next due" ne marche pas
         ]);
+
+        $data['employeeId'] = (string) $request->user()->id;
+
+        // ✅ FR standard
+        $data['status'] = 'En attente';
+        $data['submittedAt'] = now();
 
         return response()->json($this->service->create($data), 201);
     }
@@ -39,6 +66,7 @@ class MensualiteController extends Controller
             'amount' => 'nullable|numeric',
             'paidAmount' => 'nullable|numeric',
             'paidDate' => 'nullable|date',
+            'status' => 'nullable|in:En attente,Approuvé,Rejeté,Payé,Actif', // ✅ si tu modifies
         ]);
 
         return response()->json($this->service->update($id, $data));

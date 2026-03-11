@@ -10,15 +10,20 @@ class Attachment extends Model
     protected $collection = 'attachments';
 
     protected $fillable = [
-        'demandeId',            // Reference to Demande
-        'fileType',             // MIME type
-        'publicURL',            // URL if stored in cloud
-        'uploadedAt',           // DateTime
-        'uploadedBy',           // UserId
+        'demandeId',
+        'filename',          // ✅ ADDED - Original filename
+        'filepath',          // ✅ ADDED - Storage path
+        'mimetype',          // ✅ ADDED - File MIME type
+        'filesize',          // ✅ ADDED - File size in bytes
+        'type',              // ✅ ADDED - Type: demande, pret, other
+        'publicURL',         // URL if stored in cloud
+        'uploadedAt',
+        'uploadedBy',
     ];
 
     protected $casts = [
         'uploadedAt' => 'datetime',
+        'filesize' => 'integer',
     ];
 
     // Relationships

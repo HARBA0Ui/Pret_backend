@@ -10,34 +10,29 @@ class Pret extends Model
     protected $collection = 'prets';
 
     protected $fillable = [
-        'demandeId',            // Reference to Demande
-        'employeeId',           // Reference to User
-        'interestRate',         // Float (%)
-        'startDate',            // DateTime
-        'endDate',              // DateTime
-        'durationMonths',       // Total months
-        'amount',               // Float - total loan amount
-        'status',               // active, completed, defaulted
-        'remainingBalance',     // Float
-        'totalPaid',            // Float
-        'paidAt',               // DateTime when fully paid
+        'demandeId',
+        'employeeId',
+        'amount',
+        'interestRate',
+        'dureeMonths',
+        'startDate',
+        'totalToRepay',
+        'remainingBalance',
+        'status',
+        'createdAt',
+        'updatedAt',
     ];
 
     protected $casts = [
-        'startDate' => 'datetime',
-        'endDate' => 'datetime',
-        'paidAt' => 'datetime',
         'amount' => 'float',
         'interestRate' => 'float',
+        'dureeMonths' => 'integer',
+        'startDate' => 'datetime',
+        'totalToRepay' => 'float',
         'remainingBalance' => 'float',
-        'totalPaid' => 'float',
+        'createdAt' => 'datetime',
+        'updatedAt' => 'datetime',
     ];
-
-    // Relationships
-    public function demande()
-    {
-        return $this->belongsTo(Demande::class, 'demandeId');
-    }
 
     public function employee()
     {
